@@ -2,8 +2,11 @@
 Safer Transit Options for Passengers
 
 __Country__: Georgia
+
 __Funder__:  USAID through Advancing CSO Capacities and Engaging Society for Sustainability (ACCESS)
+
 __Dates__: February 2016 - February 2017
+
 __Project objective:__
 
 The STOP project aims to reduce the human costs of traffic accidents and bring Georgia closer to Europe. 
