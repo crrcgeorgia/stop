@@ -1,0 +1,581 @@
+---
+title: "Safer Transit Options for Passengers Experiment Replication Code"
+output: html_notebook
+---
+
+For the Safer Transit Options for Passengers field experiment, CRRC-Georgia interviewers observed about 360 minibus trips. However, some routes observed in the treatment and control groups were found in both groups or observed multiple times within the same wave. Given this, a number of observations were excluded when performing inferential statistics. 
+
+The logic of observation exclusion is as follows.Only one observation was kept per wave of observation. Hence, if a minibus was observed twice in the second round of observations, only one observation was kept. Only the first observation was kept, given that a person riding on a minibus and immediately returning on the same bus would likely arouse driver suspicion.In one case, a minibus was observed five times in total. The same logic was applied in this case, with only the first observation kept per wave.
+
+Besides this issue, a number of minibuses were not found at the second measureement phase.Given this issue, multivariate matching with genetic weights was used in the analysis.
+
+If you are interested in conducting a similar experiment and want to hear about some of our lessons learnt from conducting the trial, get in touch and we are happy to have a conversation.
+
+After excluding problematic observations, there were 68 in the first wave control group, 103 in the treatment group second wave of observation, 60 in the third wave of observation treatment group, and 107 in the new or former control group.
+
+```{r}
+## Subsetting included observations
+
+stopsub<-subset(stop, keep==1)
+table(stopsub$group)
+
+```
+
+The code below was used for subsetting and matching.
+
+```{r}
+stopsub$condition<-as.numeric(stopsub$group)
+
+stopsubt1c1<-subset(stopsub, stopsub$condition==1|stopsub$condition==2)
+stopsubc1c2<-subset(stopsub, stopsub$condition==1|stopsub$condition==4)
+stopsubt1t2<-subset(stopsub, stopsub$condition==2|stopsub$condition==3)
+
+table(stopsubt1c1$condition)
+
+stopsubt1c1$treat<-stopsubt1c1$condition
+stopsubt1c1$treat[stopsubt1c1$treat==1]<-0
+stopsubt1c1$treat[stopsubt1c1$treat==2]<-1
+table(stopsubt1c1$treat)
+
+stopsubc1c2$treat<-stopsubc1c2$condition
+table(stopsubc1c2$treat)
+stopsubc1c2$treat[stopsubc1c2$treat==1]<-0
+stopsubc1c2$treat[stopsubc1c2$treat==4]<-1
+
+stopsubt1t2$treat<-stopsubt1t2$condition
+table(stopsubt1t2$treat)
+stopsubt1t2$treat[stopsubt1t2$treat==2]<-0
+stopsubt1t2$treat[stopsubt1t2$treat==3]<-1
+
+psmodelstop1<-glm(stopsubt1c1$treat~stopsubt1c1$e1 + stopsubt1c1$e2 + stopsubt1c1$e5 + stopsubt1c1$e6 + stopsubt1c1$e7 + stopsubt1c1$e8 + stopsubt1c1$e9 + stopsubt1c1$distance, family = binomial)
+stopsubt1c1$psm<-psmodelstop1$fitted.values
+
+psmodelstop2<-glm(stopsubc1c2$treat~stopsubc1c2$e1 + stopsubc1c2$e2 + stopsubc1c2$e3 + stopsubc1c2$e4 + stopsubc1c2$e5 + stopsubc1c2$e6 + stopsubc1c2$e7 + stopsubc1c2$e8 + stopsubc1c2$e9 + stopsubc1c2$distance, family = binomial)
+stopsubc1c2$psm<-psmodelstop2$fitted.values
+
+psmodelstop3<-glm(stopsubt1t2$treat~stopsubt1t2$e1 + stopsubt1t2$e2 + stopsubt1t2$e3 + stopsubt1t2$e4 + stopsubt1t2$e5 + stopsubt1t2$e6 + stopsubt1t2$e7 + stopsubt1t2$e8 + stopsubt1t2$e9 + stopsubt1t2$distance, family = binomial)
+stopsubt1t2$psm<-psmodelstop3$fitted.values
+
+### match on
+XTC = cbind(stopsubt1c1$e1, stopsubt1c1$e2, stopsubt1c1$e5, stopsubt1c1$e6, stopsubt1c1$e7, stopsubt1c1$e8, stopsubt1c1$e9, stopsubt1c1$distance, stopsubt1c1$psm)
+XCC = cbind(stopsubc1c2$e1, stopsubc1c2$e2, stopsubc1c2$e5, stopsubc1c2$e6, stopsubc1c2$e7, stopsubc1c2$e8, stopsubc1c2$e9, stopsubc1c2$distance, stopsubc1c2$psm)
+XTT = cbind(stopsubt1t2$e1, stopsubt1t2$e2, stopsubt1t2$e5, stopsubt1t2$e6, stopsubt1t2$e7, stopsubt1t2$e8, stopsubt1t2$e9, stopsubt1t2$distance, stopsubt1t2$psm)
+
+BalmatTC = cbind(stopsubt1c1$e1, stopsubt1c1$e2, stopsubt1c1$e5, stopsubt1c1$e6, stopsubt1c1$e7, stopsubt1c1$e8, stopsubt1c1$e9, stopsubt1c1$distance, stopsubt1c1$psm)
+BalmatCC = cbind(stopsubc1c2$e1, stopsubc1c2$e2, stopsubc1c2$e5, stopsubc1c2$e6, stopsubc1c2$e7, stopsubc1c2$e8, stopsubc1c2$e9, stopsubc1c2$distance, stopsubc1c2$psm)
+BalmatTT = cbind(stopsubt1t2$e1, stopsubt1t2$e2, stopsubt1t2$e5, stopsubt1t2$e6, stopsubt1t2$e7, stopsubt1t2$e8, stopsubt1t2$e9, stopsubt1t2$distance, stopsubt1t2$psm)
+
+genoutTC <- GenMatch(Tr=stopsubt1c1$treat, X=XTC, int.seed = 42, unif.seed = 43,
+                     BalanceMatrix=BalmatTC, estimand="ATT",
+                     pop.size=500)
+
+genoutCC <- GenMatch(Tr=stopsubc1c2$treat, X=XCC, int.seed = 42, unif.seed = 43,
+                     BalanceMatrix=BalmatCC, estimand="ATT",
+                     pop.size=500)
+
+genoutTT <- GenMatch(Tr=stopsubt1t2$treat, X=XTT, int.seed = 42, unif.seed = 43,
+                     BalanceMatrix=BalmatTT, estimand="ATT",
+                     pop.size=500)
+
+```
+
+Match balance is tested for below in the wave 1 treatment and control group observations.
+
+```{r}
+mout1<-Match(Tr=stopsubt1c1$treat, X=XTC, estimand="ATT",  
+             Weight.matrix=genoutTC)
+mb1  <- MatchBalance(stopsubt1c1$treat ~stopsubt1c1$e1 + stopsubt1c1$e2 + stopsubt1c1$e5 + stopsubt1c1$e6 + stopsubt1c1$e7 + stopsubt1c1$e8 + stopsubt1c1$e9 + stopsubt1c1$distance + stopsubt1c1$psm , match.out=mout1, nboots=5000)
+
+```
+
+Here match balance is presented for the comparison of the treatment wave one observations as well as treatment wave two observations.
+
+```{r}
+mout2<-Match(Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+             Weight.matrix=genoutTT)
+mb2  <- MatchBalance(stopsubt1t2$treat ~stopsubt1t2$e1 + stopsubt1t2$e2 + stopsubt1t2$e5 + stopsubt1t2$e6 + stopsubt1t2$e7 + stopsubt1t2$e8 + stopsubt1t2$e9 + stopsubt1t2$distance + stopsubt1t2$psm , match.out=mout2, nboots=5000)
+
+```
+
+Finally, the match balance for the comparison of control groups in the first round of observation compared to in the second round of observation. 
+
+```{r}
+mout3<-Match(Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+             Weight.matrix=genoutCC)
+
+mb3  <- MatchBalance(stopsubc1c2$treat ~stopsubc1c2$e1 + stopsubc1c2$e2 + stopsubc1c2$e5 + stopsubc1c2$e6 + stopsubc1c2$e7 + stopsubc1c2$e8 + stopsubc1c2$e9 + stopsubc1c2$distance + stopsubc1c2$psm , match.out=mout3, nboots=5000)
+
+```
+
+Below is the code used to estimate the overall treatment effect.
+```{r}
+moutTC <- Match(Y=stopsubt1c1$total, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                Weight.matrix=genoutTC)
+summary(moutTC)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+tottcconup<-(moutTC$est+moutTC$se*1.96)
+tottccondown<-(moutTC$est-moutTC$se*1.96)
+tottcinter<-c(tottcconup,tottccondown)
+tottcinter
+```
+Estimates for changes in speed.
+
+```{r}
+moutTCspeed <- Match(Y=stopsubt1c1$speed, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                     Weight.matrix=genoutTC)
+summary(moutTCspeed)
+
+```
+
+And the 95% confidence intervals.
+
+```{r}
+speedtcconup<-(moutTCspeed$est+moutTCspeed$se*1.96)
+speedtccondown<-(moutTCspeed$est-moutTCspeed$se*1.96)
+speedtcinter<-c(speedtcconup,speedtccondown)
+speedtcinter
+
+```
+Estimate of the decline in telephone calls.
+
+```{r}
+moutTCtelephone <- Match(Y=stopsubt1c1$Telephone, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                         Weight.matrix=genoutTC)
+summary(moutTCtelephone)
+
+```
+And the 95% confidence intervals.
+
+```{r}
+telephonetcconup<-(moutTCtelephone$est+moutTCtelephone$se*1.96)
+telephonetccondown<-(moutTCtelephone$est-moutTCtelephone$se*1.96)
+telephonetcinter<-c(telephonetcconup,telephonetccondown)
+telephonetcinter
+
+```
+
+Estimates for effects on texting.
+```{r}
+moutTCtexting <- Match(Y=stopsubt1c1$Texting, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                       Weight.matrix=genoutTC)
+summary(moutTCtexting)
+
+```
+And the 95% confidence intervals.
+
+```{r}
+textingtcconup<-(moutTCtexting$est+moutTCtexting$se*1.96)
+textingtccondown<-(moutTCtexting$est-moutTCtexting$se*1.96)
+textingtcinter<-c(textingtcconup,textingtccondown)
+textingtcinter
+```
+
+Estimates for the effect on smoking.
+```{r}
+moutTCsmoking <- Match(Y=stopsubt1c1$Smoking, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                       Weight.matrix=genoutTC)
+summary(moutTCsmoking)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+smokingtcconup<-(moutTCsmoking$est+moutTCsmoking$se*1.96)
+smokingtccondown<-(moutTCsmoking$est-moutTCsmoking$se*1.96)
+smokingtcinter<-c(smokingtcconup,smokingtccondown)
+smokingtcinter
+```
+
+And the estimate for seat belt use.
+```{r}
+moutTCbelt <- Match(Y=stopsubt1c1$Belt, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                    Weight.matrix=genoutTC)
+summary(moutTCbelt)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+belttcconup<-(moutTCbelt$est+moutTCbelt$se*1.96)
+belttccondown<-(moutTCbelt$est-moutTCbelt$se*1.96)
+belttcinter<-c(belttcconup,belttccondown)
+belttcinter
+```
+The data on passing.
+
+```{r}
+moutTCpass <- Match(Y=stopsubt1c1$Pass, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                    Weight.matrix=genoutTC)
+summary(moutTCpass)
+
+```
+And the 95% confidence intervals.
+
+```{r}
+passtcconup<-(moutTCpass$est+moutTCpass$se*1.96)
+passtccondown<-(moutTCpass$est-moutTCpass$se*1.96)
+passtcinter<-c(passtcconup,passtccondown)
+passtcinter
+```
+The data on aggressive maneuvers.
+```{r}
+moutTCagman <- Match(Y=stopsubt1c1$Agman, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                     Weight.matrix=genoutTC)
+summary(moutTCagman)
+
+```
+And the 95% confidence intervals.
+```{r}
+agmantcconup<-(moutTCagman$est+moutTCagman$se*1.96)
+agmantccondown<-(moutTCagman$est-moutTCagman$se*1.96)
+agmantcinter<-c(agmantcconup,agmantccondown)
+agmantcinter
+```
+
+Aggressive behavior towards passengers.
+```{r}
+moutTCagpassenger <- Match(Y=stopsubt1c1$Agpassenger, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                           Weight.matrix=genoutTC)
+summary(moutTCagpassenger)
+
+```
+And the 95% confidence intervals.
+```{r}
+agpassengertcconup<-(moutTCagpassenger$est+moutTCagpassenger$se*1.96)
+agpassengertccondown<-(moutTCagpassenger$est-moutTCagpassenger$se*1.96)
+agpassengertcinter<-c(agpassengertcconup,agpassengertccondown)
+agpassengertcinter
+```
+Estimates on aggressive behavior towards non-passengers.
+
+```{r}
+moutTCagother <- Match(Y=stopsubt1c1$Agother, Tr=stopsubt1c1$treat, X=XTC, estimand="ATT", 
+                       Weight.matrix=genoutTC)
+summary(moutTCagother)
+
+```
+And the 95% confidence intervals.
+```{r}
+agothertcconup<-(moutTCagother$est+moutTCagother$se*1.96)
+agothertccondown<-(moutTCagother$est-moutTCagother$se*1.96)
+agothertcinter<-c(agothertcconup,agothertccondown)
+agothertcinter
+```
+
+Below we test for a contamination effect, comparing the first round control group to the second round control group. Overall, we see no contamination effect.
+
+```{r}
+moutCC <- Match(Y=stopsubc1c2$total, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                Weight.matrix=genoutCC)
+summary(moutCC)
+
+```
+And the 95% confidence intervals.
+
+```{r}
+totccconup<-(moutCC$est+moutCC$se*1.96)
+totcccondown<-(moutCC$est-moutCC$se*1.96)
+totccinter<-c(totccconup,totcccondown)
+totccinter
+```
+
+The estimates for speed are significant.
+```{r}
+moutCCspeed <- Match(Y=stopsubc1c2$speed, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                         Weight.matrix=genoutCC)
+summary(moutCCspeed)
+```
+
+And the 95% confidence intervals.
+```{r}
+speedccconup<-(moutCCspeed$est+moutCCspeed$se*1.96)
+speedcccondown<-(moutCCspeed$est-moutCCspeed$se*1.96)
+speedccinter<-c(speedccconup,speedcccondown)
+speedccinter
+```
+
+For telephone calls.
+
+```{r}
+moutCCtelephone <- Match(Y=stopsubc1c2$Telephone, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                         Weight.matrix=genoutCC)
+summary(moutCCtelephone)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+telephoneccconup<-(moutCCtelephone$est+moutCCtelephone$se*1.96)
+telephonecccondown<-(moutCCtelephone$est-moutCCtelephone$se*1.96)
+telephoneccinter<-c(telephoneccconup,telephonecccondown)
+telephoneccinter
+```
+
+Estimates on text messaging.
+```{r}
+moutCCtexting <- Match(Y=stopsubc1c2$Texting, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                       Weight.matrix=genoutCC)
+summary(moutCCtexting)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+textingccconup<-(moutCCtexting$est+moutCCtexting$se*1.96)
+textingcccondown<-(moutCCtexting$est-moutCCtexting$se*1.96)
+textingccinter<-c(textingccconup,textingcccondown)
+textingccinter
+
+```
+Estimates on smoking.
+
+```{r}
+moutCCsmoking <- Match(Y=stopsubc1c2$Smoking, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                       Weight.matrix=genoutCC)
+summary(moutCCsmoking)
+
+```
+And the 95% confidence intervals.
+```{r}
+smokingccconup<-(moutCCsmoking$est+moutCCsmoking$se*1.96)
+smokingcccondown<-(moutCCsmoking$est-moutCCsmoking$se*1.96)
+smokingccinter<-c(smokingccconup,smokingcccondown)
+smokingccinter
+```
+
+Estimates for seatbelt use.
+```{r}
+moutCCbelt <- Match(Y=stopsubc1c2$Belt, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                    Weight.matrix=genoutCC)
+summary(moutCCbelt)
+
+```
+And the 95% confidence intervals.
+```{r}
+beltccconup<-(moutCCbelt$est+moutCCbelt$se*1.96)
+beltcccondown<-(moutCCbelt$est-moutCCbelt$se*1.96)
+beltccinter<-c(beltccconup,beltcccondown)
+beltccinter
+```
+
+Estimates for passing.
+```{r}
+moutCCpass <- Match(Y=stopsubc1c2$Pass, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                    Weight.matrix=genoutCC)
+summary(moutCCpass)
+```
+
+And the 95% confidence intervals.
+```{r}
+passccconup<-(moutCCpass$est+moutCCpass$se*1.96)
+passcccondown<-(moutCCpass$est-moutCCpass$se*1.96)
+passccinter<-c(passccconup,passcccondown)
+passccinter
+```
+
+Estimates for aggressive maneuvers.
+```{r}
+moutCCagman <- Match(Y=stopsubc1c2$Agman, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                     Weight.matrix=genoutCC)
+summary(moutCCagman)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+agmanccconup<-(moutCCagman$est+moutCCagman$se*1.96)
+agmancccondown<-(moutCCagman$est-moutCCagman$se*1.96)
+agmanccinter<-c(agmanccconup,agmancccondown)
+agmanccinter
+
+```
+
+Estimates for aggressive behavior towards passengers.
+
+```{r}
+moutCCagpassenger <- Match(Y=stopsubc1c2$Agpassenger, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                           Weight.matrix=genoutCC)
+summary(moutCCagpassenger)
+
+```
+
+And the 95% confidence intervals.
+```{r}
+agpassengerccconup<-(moutCCagpassenger$est+moutCCagpassenger$se*1.96)
+agpassengercccondown<-(moutCCagpassenger$est-moutCCagpassenger$se*1.96)
+agpassengerccinter<-c(agpassengerccconup,agpassengercccondown)
+agpassengerccinter
+```
+
+Estimates for aggressive maneuvers.
+```{r}
+moutCCagother <- Match(Y=stopsubc1c2$Agother, Tr=stopsubc1c2$treat, X=XCC, estimand="ATT", 
+                       Weight.matrix=genoutCC)
+summary(moutCCagother)
+
+```
+And the 95% confidence intervals.
+```{r}
+agotherccconup<-(moutCCagother$est+moutCCagother$se*1.96)
+agothercccondown<-(moutCCagother$est-moutCCagother$se*1.96)
+agotherccinter<-c(agotherccconup,agothercccondown)
+agotherccinter
+```
+
+Below we present estimates for lasting effects. If there is no significant change, this potentially suggests a lack of lasting effect. The logic of this is that if there is no significant increase from the significantly lower level of dangerous driving behavior, then this suggests that dangerous driving behaviors remained at lower levels. Overall, we find a lasting effect, but dangerous driving behaviors increased.
+
+
+```{r}
+moutTT <- Match(Y=stopsubt1t2$total, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                Weight.matrix=genoutTT)
+summary(moutTT)
+
+```
+And the 95% confidence intervals.
+```{r}
+totttconup<-(moutTT$est+moutTT$se*1.96)
+totttcondown<-(moutTT$est-moutTT$se*1.96)
+totttinter<-c(totttconup,totttcondown)
+totttinter
+
+```
+
+Estimates on speed.
+```{r}
+moutTTspeed <- Match(Y=stopsubt1t2$speed, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                     Weight.matrix=genoutTT)
+summary(moutTTspeed)
+
+```
+And the 95% confidence intervals.
+```{r}
+speedttconup<-(moutTTspeed$est+moutTTspeed$se*1.96)
+speedttcondown<-(moutTTspeed$est-moutTTspeed$se*1.96)
+speedttinter<-c(speedttconup,speedttcondown)
+speedttinter
+
+```
+
+Estimates for telephone calls.
+```{r}
+moutTTtelephone <- Match(Y=stopsubt1t2$Telephone, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                         Weight.matrix=genoutTT)
+summary(moutTTtelephone)
+
+```
+And the 95% confidence intervals.
+```{r}
+telephonettconup<-(moutTTtelephone$est+moutTTtelephone$se*1.96)
+telephonettcondown<-(moutTTtelephone$est-moutTTtelephone$se*1.96)
+telephonettinter<-c(telephonettconup,telephonettcondown)
+telephonettinter
+
+```
+Estimates for text messaging.
+```{r}
+moutTTtexting <- Match(Y=stopsubt1t2$Texting, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                       Weight.matrix=genoutTT)
+summary(moutTTtexting)
+
+```
+And the 95% confidence intervals.
+```{r}
+textingttconup<-(moutTTtexting$est+moutTTtexting$se*1.96)
+textingttcondown<-(moutTTtexting$est-moutTTtexting$se*1.96)
+textingttinter<-c(textingttconup,textingttcondown)
+textingttinter
+```
+Estimates for smoking.
+```{r}
+moutTTsmoking <- Match(Y=stopsubt1t2$Smoking, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                       Weight.matrix=genoutTT)
+summary(moutTTsmoking)
+
+```
+And the 95% confidence intervals.
+```{r}
+smokingttconup<-(moutTTsmoking$est+moutTTsmoking$se*1.96)
+smokingttcondown<-(moutTTsmoking$est-moutTTsmoking$se*1.96)
+smokingttinter<-c(smokingttconup,smokingttcondown)
+smokingttinter
+```
+Estimates for seat belt use.
+```{r}
+moutTTbelt <- Match(Y=stopsubt1t2$Belt, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                    Weight.matrix=genoutTT)
+summary(moutTTbelt)
+
+
+```
+And the 95% confidence intervals.
+```{r}
+beltttconup<-(moutTTbelt$est+moutTTbelt$se*1.96)
+beltttcondown<-(moutTTbelt$est-moutTTbelt$se*1.96)
+beltttinter<-c(beltttconup,beltttcondown)
+beltttinter
+
+```
+Estimates for illegal passing.
+```{r}
+moutTTpass <- Match(Y=stopsubt1t2$Pass, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                    Weight.matrix=genoutTT)
+summary(moutTTpass)
+
+
+```
+And the 95% confidence intervals.
+```{r}
+passttconup<-(moutTTpass$est+moutTTpass$se*1.96)
+passttcondown<-(moutTTpass$est-moutTTpass$se*1.96)
+passttinter<-c(passttconup,passttcondown)
+passttinter
+
+```
+Estimates for aggressive maneuvers.
+```{r}
+moutTTagman <- Match(Y=stopsubt1t2$Agman, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                     Weight.matrix=genoutTT)
+summary(moutTTagman)
+
+```
+And the 95% confidence intervals.
+```{r}
+agmanttconup<-(moutTTagman$est+moutTTagman$se*1.96)
+agmanttcondown<-(moutTTagman$est-moutTTagman$se*1.96)
+agmanttinter<-c(agmanttconup,agmanttcondown)
+agmanttinter
+
+```
+Estimates for aggression towards passengers.
+```{r}
+moutTTagpassenger <- Match(Y=stopsubt1t2$Agpassenger, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                           Weight.matrix=genoutTT)
+summary(moutTTagpassenger)
+
+```
+And the 95% confidence intervals.
+```{r}
+agpassengerttconup<-(moutTTagpassenger$est+moutTTagpassenger$se*1.96)
+agpassengerttcondown<-(moutTTagpassenger$est-moutTTagpassenger$se*1.96)
+agpassengerttinter<-c(agpassengerttconup,agpassengerttcondown)
+agpassengerttinter
+
+```
+
+Estimates for aggressive towards others.
+```{r}
+moutTTagother <- Match(Y=stopsubt1t2$Agother, Tr=stopsubt1t2$treat, X=XTT, estimand="ATT", 
+                       Weight.matrix=genoutTT)
+summary(moutTTagother)
+```
+And the 95% confidence intervals.
+```{r}
+agotherttconup<-(moutTTagother$est+moutTTagother$se*1.96)
+agotherttcondown<-(moutTTagother$est-moutTTagother$se*1.96)
+agotherttinter<-c(agotherttconup,agotherttcondown)
+agotherttinter
+```
