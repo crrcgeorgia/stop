@@ -1,7 +1,7 @@
 # stop
 Safer Transit Options for Passengers
 
-__Country__: Georgia_
+__Country__: Georgia
 __Funder__:  USAID through Advancing CSO Capacities and Engaging Society for Sustainability (ACCESS)
 __Dates__: February 2016 - February 2017
 __Project objective:__
